@@ -92,6 +92,8 @@ Item {
     anchors.rightMargin: Style.space(8)
     anchors.topMargin: Style.space(8)
     anchors.bottomMargin: Style.space(8)
+    readonly property real firstRowHeight: Math.max(pill.height, check.height, actions.height)
+
     implicitHeight: headerBand.height
       + (root.editing ? extra.implicitHeight : 0)
       + ((root.expanded && !root.editing) ? extra.implicitHeight + Style.space(8) : 0)
@@ -101,7 +103,7 @@ Item {
       width: Style.space(20)
       height: Style.space(20)
       anchors.left: parent.left
-      y: root.editing ? 0 : Math.round((headerBand.height - height) / 2)
+      y: root.editing ? 0 : Math.round((body.firstRowHeight - height) / 2)
 
       Rectangle {
         anchors.fill: parent
@@ -140,16 +142,14 @@ Item {
       anchors.leftMargin: Style.space(10)
       anchors.rightMargin: Style.space(8)
       height: root.editing ? 0 : Math.max(
-        pill.height,
-        titleLabel.implicitHeight,
-        check.height,
-        actions.height
+        body.firstRowHeight,
+        titleLabel.y + titleLabel.height
       )
 
       Rectangle {
         id: pill
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
+        x: 0
+        y: Math.round((body.firstRowHeight - height) / 2)
         width: pillLabel.implicitWidth + Style.space(10)
         height: pillLabel.implicitHeight + Style.space(4)
         radius: height / 2
@@ -175,7 +175,10 @@ Item {
         anchors.left: pill.right
         anchors.leftMargin: Style.space(8)
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
+        y: {
+          var line = implicitHeight / Math.max(1, lineCount)
+          return Math.round((body.firstRowHeight - line) / 2)
+        }
         height: implicitHeight
         textFormat: Text.PlainText
         text: root.title
@@ -184,9 +187,10 @@ Item {
         font.pixelSize: Style.font.subtitle
         font.bold: !root.completed
         font.strikeout: root.completed
+        wrapMode: Text.Wrap
+        maximumLineCount: root.expanded && !root.editing ? 12 : 2
         elide: Text.ElideRight
-        wrapMode: Text.NoWrap
-        verticalAlignment: Text.AlignVCenter
+        verticalAlignment: Text.AlignTop
       }
     }
 
@@ -267,12 +271,15 @@ Item {
     Row {
       id: actions
       anchors.right: parent.right
-      y: root.editing ? 0 : Math.round((headerBand.height - height) / 2)
+      y: root.editing ? 0 : Math.round((body.firstRowHeight - height) / 2)
       spacing: Style.space(2)
 
       PanelActionButton {
         iconText: root.expanded && !root.editing ? "\uF077" : "\uF078"
-        tooltipText: root.expanded && !root.editing ? "Hide description" : "Show description"
+        tooltipText: {
+          if (root.expanded && !root.editing) return "Hide extra"
+          return titleLabel.truncated ? "Show the rest" : "Show description"
+        }
         foreground: root.foreground
         fontFamily: root.fontFamily
         onClicked: root.expandToggled()
