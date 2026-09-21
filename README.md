@@ -38,14 +38,16 @@ That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
 - **Backlog, Ongoing, and Completed** as three tabs. Each list sorts Critical
   first, then High, Medium, Low. New tasks land on the tab you are looking at
   (Ongoing if you are on Completed). Play starts a backlog item; pause parks
-  an ongoing item. The circle marks a task complete; unchecking it returns it
-  to Ongoing.
+  an ongoing item. The circle marks a task complete. The last tab you used
+  is remembered.
 - **Search** from the field at the top, or press `/` with the panel open.
-- **Add** from the form at the bottom: title, optional description, priority.
-  Enter adds the task. Shift+Enter starts a new line in the description.
-  `n` focuses the title field.
-- **Expand** the chevron to read a description. **Edit** the pencil to change
-  title, description, and priority in place. × removes it.
+- **Add** from the field at the bottom. Focus it (or press `n`) to reveal
+  description, priority, and Add. Enter adds the task. Shift+Enter starts a
+  new line in the description.
+- **Click a row** to expand the title and description. Hover a row for edit,
+  park/start, and remove. The pencil still opens in-place edit. × removes it.
+- **Completed** is quieter. **Clear** at the bottom right of that tab
+  removes every finished task.
 
 | Backlog | Completed |
 | --- | --- |
@@ -55,7 +57,7 @@ That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
 
 | Key | |
 | --- | --- |
-| `n` | Focus the new-task title |
+| `n` | Focus the add field |
 | `/` | Focus search |
 | Left / Right | Cycle Backlog, Ongoing, Completed |
 | Enter | Add or save |

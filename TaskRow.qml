@@ -26,6 +26,7 @@ Item {
   readonly property bool completed: status === "complete"
   readonly property bool parked: status === "backlog"
   readonly property color accent: Todos.color(editing ? draftPriority : priority)
+  readonly property bool chromeVisible: rowHover.hovered || expanded || editing
 
   property string draftTitle: ""
   property string draftDescription: ""
@@ -73,13 +74,17 @@ Item {
   Component.onCompleted: loadDrafts()
   Component.onDestruction: if (editing) commit()
 
+  HoverHandler {
+    id: rowHover
+  }
+
   Rectangle {
     anchors.fill: parent
     radius: Style.cornerRadius
     color: Util.alpha(root.foreground, root.completed ? 0.03 : 0.045)
     border.width: 1
     border.color: Util.alpha(root.foreground, 0.10)
-    opacity: root.completed ? 0.78 : 1
+    opacity: root.completed ? 0.64 : 1
   }
 
   Item {
@@ -137,7 +142,7 @@ Item {
       id: headerBand
       visible: !root.editing
       anchors.left: check.right
-      anchors.right: actions.left
+      anchors.right: parent.right
       anchors.top: parent.top
       anchors.leftMargin: Style.space(10)
       anchors.rightMargin: Style.space(8)
@@ -175,6 +180,7 @@ Item {
         anchors.left: pill.right
         anchors.leftMargin: Style.space(8)
         anchors.right: parent.right
+        anchors.rightMargin: actions.width
         y: {
           var line = implicitHeight / Math.max(1, lineCount)
           return Math.round((body.firstRowHeight - line) / 2)
@@ -191,6 +197,15 @@ Item {
         maximumLineCount: root.expanded && !root.editing ? 12 : 2
         elide: Text.ElideRight
         verticalAlignment: Text.AlignTop
+      }
+
+      TapHandler {
+        acceptedButtons: Qt.LeftButton
+        onTapped: root.expandToggled()
+      }
+
+      HoverHandler {
+        cursorShape: Qt.PointingHandCursor
       }
     }
 
@@ -214,6 +229,11 @@ Item {
         font.pixelSize: Style.font.body
         font.italic: root.description === ""
         wrapMode: Text.Wrap
+
+        TapHandler {
+          acceptedButtons: Qt.LeftButton
+          onTapped: root.expandToggled()
+        }
       }
 
       Column {
@@ -273,6 +293,10 @@ Item {
       anchors.right: parent.right
       y: root.editing ? 0 : Math.round((body.firstRowHeight - height) / 2)
       spacing: Style.space(2)
+      z: 2
+      opacity: root.chromeVisible ? 1 : 0
+      enabled: root.chromeVisible
+      Behavior on opacity { NumberAnimation { duration: 90 } }
 
       PanelActionButton {
         iconText: root.expanded && !root.editing ? "\uF077" : "\uF078"

@@ -50,6 +50,12 @@ function normalizeStatus(status, completed) {
   return completed === true ? "complete" : "ongoing"
 }
 
+function normalizeTab(tab) {
+  var value = String(tab || "").toLowerCase()
+  if (value === "backlog" || value === "ongoing" || value === "complete") return value
+  return "ongoing"
+}
+
 function addStatusForTab(tab) {
   return String(tab || "") === "backlog" ? "backlog" : "ongoing"
 }
@@ -141,9 +147,10 @@ function normalizeTask(raw) {
   }
 }
 
-function parse(raw) {
+function parseStore(raw) {
+  var empty = { tasks: [], activeTab: "ongoing" }
   var text = trim(raw)
-  if (text === "") return []
+  if (text === "") return empty
   try {
     var data = JSON.parse(text)
     var list = Array.isArray(data) ? data : (data && Array.isArray(data.tasks) ? data.tasks : [])
@@ -152,14 +159,22 @@ function parse(raw) {
       var task = normalizeTask(list[i])
       if (task) out.push(task)
     }
-    return out
+    return { tasks: out, activeTab: normalizeTab(data && data.activeTab) }
   } catch (e) {
-    return []
+    return empty
   }
 }
 
-function serialize(tasks) {
-  return JSON.stringify({ version: 1, tasks: tasks || [] }, null, 2) + "\n"
+function parse(raw) {
+  return parseStore(raw).tasks
+}
+
+function serialize(tasks, activeTab) {
+  return JSON.stringify({
+    version: 1,
+    activeTab: normalizeTab(activeTab),
+    tasks: tasks || []
+  }, null, 2) + "\n"
 }
 
 function matches(task, query) {
@@ -241,6 +256,16 @@ function remove(tasks, id) {
   var out = []
   for (var i = 0; i < list.length; i++) {
     if (list[i] && list[i].id !== id) out.push(list[i])
+  }
+  return out
+}
+
+function removeCompleted(tasks) {
+  var list = tasks || []
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && normalizeStatus(list[i].status, list[i].completed) !== "complete")
+      out.push(list[i])
   }
   return out
 }

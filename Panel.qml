@@ -46,10 +46,15 @@ Panel {
     || Object.keys(editingIds).length > 0
 
   property bool applyingOwnWrite: false
+  property bool storeReady: false
+  readonly property bool composerOpen: titleField.activeFocus
+    || descriptionField.activeFocus
+    || Todos.trim(titleField.text) !== ""
 
   function persist() {
+    if (!root.storeReady) return
     applyingOwnWrite = true
-    storeFile.setText(Todos.serialize(root.tasks))
+    storeFile.setText(Todos.serialize(root.tasks, root.activeTab))
   }
 
   function addTask() {
@@ -70,7 +75,6 @@ Panel {
   function toggleCompleted(id, completed) {
     root.tasks = Todos.setCompleted(root.tasks, id, completed)
     root.persist()
-    if (!completed) root.activeTab = "ongoing"
   }
 
   function moveTask(id, status) {
@@ -80,6 +84,13 @@ Panel {
 
   function removeTask(id) {
     root.tasks = Todos.remove(root.tasks, id)
+    root.persist()
+  }
+
+  function clearCompleted() {
+    var next = Todos.removeCompleted(root.tasks)
+    if (next === root.tasks) return
+    root.tasks = next
     root.persist()
   }
 
@@ -150,7 +161,10 @@ Panel {
     return false
   }
 
-  onActiveTabChanged: listFlick.contentY = 0
+  onActiveTabChanged: {
+    listFlick.contentY = 0
+    if (root.storeReady) root.persist()
+  }
 
   FileView {
     id: storeFile
@@ -163,11 +177,15 @@ Panel {
         root.applyingOwnWrite = false
         return
       }
-      root.tasks = Todos.parse(text())
+      var store = Todos.parseStore(text())
+      root.tasks = store.tasks
+      root.activeTab = store.activeTab
+      root.storeReady = true
     }
     onLoadFailed: {
       root.applyingOwnWrite = false
       root.tasks = []
+      root.storeReady = true
     }
     onFileChanged: if (!root.applyingOwnWrite) reload()
   }
@@ -247,7 +265,7 @@ Panel {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: "n new  ·  / search"
+            text: "n add  ·  / search"
             color: Qt.darker(root.contentForeground, 1.55)
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -364,6 +382,24 @@ Panel {
                 }
               }
             }
+
+            Item {
+              visible: root.activeTab === "complete" && root.completeTasks.length > 0 && root.query === ""
+              width: parent.width
+              height: visible ? clearCompletedButton.implicitHeight + Style.space(16) : 0
+
+              Button {
+                id: clearCompletedButton
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                text: "Clear"
+                tooltipText: "Remove every completed task"
+                foreground: root.contentForeground
+                fontFamily: root.contentFontFamily
+                bordered: true
+                onClicked: root.clearCompleted()
+              }
+            }
           }
         }
 
@@ -385,28 +421,27 @@ Panel {
             anchors.rightMargin: Style.space(12)
             spacing: Style.space(8)
 
-            Text {
-              textFormat: Text.PlainText
-              text: root.draftStatus === "backlog" ? "NEW · BACKLOG" : "NEW · ONGOING"
-              color: Qt.darker(root.contentForeground, 1.4)
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 0.8
-            }
-
             TextField {
               id: titleField
               width: parent.width
-              placeholderText: "Title"
+              placeholderText: root.draftStatus === "backlog" ? "Add to Backlog" : "Add a task"
               foreground: root.contentForeground
               font.family: root.contentFontFamily
               onAccepted: root.addTask()
-              Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+              Keys.onEscapePressed: {
+                if (Todos.trim(text) === "" && !descriptionField.activeFocus) {
+                  text = ""
+                  descriptionField.text = ""
+                  keyCatcher.forceActiveFocus()
+                } else {
+                  keyCatcher.forceActiveFocus()
+                }
+              }
             }
 
             DescriptionArea {
               id: descriptionField
+              visible: root.composerOpen
               width: parent.width
               foreground: root.contentForeground
               font.family: root.contentFontFamily
@@ -416,8 +451,9 @@ Panel {
             }
 
             Item {
+              visible: root.composerOpen
               width: parent.width
-              height: Math.max(chipRow.implicitHeight, addButton.implicitHeight)
+              height: visible ? Math.max(chipRow.implicitHeight, addButton.implicitHeight) : 0
 
               Flow {
                 id: chipRow
