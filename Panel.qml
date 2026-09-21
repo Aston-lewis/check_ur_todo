@@ -29,17 +29,16 @@ Panel {
   property var expandedIds: ({})
   property var editingIds: ({})
 
-  readonly property var ongoingTasks: Todos.listed(tasks, query, false)
-  readonly property var completeTasks: Todos.listed(tasks, query, true)
-  readonly property var visibleTasks: activeTab === "complete" ? completeTasks : ongoingTasks
+  readonly property var backlogTasks: Todos.listed(tasks, query, "backlog")
+  readonly property var ongoingTasks: Todos.listed(tasks, query, "ongoing")
+  readonly property var completeTasks: Todos.listed(tasks, query, "complete")
+  readonly property var visibleTasks: Todos.listed(tasks, query, activeTab)
   readonly property int ongoingCount: Todos.ongoingCount(tasks)
   readonly property string highestOngoing: Todos.highestOngoing(tasks)
   readonly property color badgeColor: highestOngoing !== "" ? Todos.color(highestOngoing) : Color.accent
   readonly property var priorityOptions: Todos.priorityOptions()
-  readonly property var tabOptions: [
-    { value: "ongoing", label: "Ongoing" },
-    { value: "complete", label: "Complete" }
-  ]
+  readonly property var tabOptions: Todos.tabOptions()
+  readonly property string draftStatus: Todos.addStatusForTab(activeTab)
 
   readonly property bool formFocused: titleField.activeFocus
     || descriptionField.activeFocus
@@ -54,14 +53,15 @@ Panel {
   }
 
   function addTask() {
-    var task = Todos.createTask(titleField.text, descriptionField.text, root.draftPriority)
+    var status = root.draftStatus
+    var task = Todos.createTask(titleField.text, descriptionField.text, root.draftPriority, status)
     if (!task.title) {
       titleField.forceActiveFocus()
       return
     }
     root.tasks = Todos.add(root.tasks, task)
     root.persist()
-    root.activeTab = "ongoing"
+    root.activeTab = task.status
     titleField.text = ""
     descriptionField.text = ""
     Qt.callLater(function() { titleField.forceActiveFocus() })
@@ -69,6 +69,12 @@ Panel {
 
   function toggleCompleted(id, completed) {
     root.tasks = Todos.setCompleted(root.tasks, id, completed)
+    root.persist()
+    if (!completed) root.activeTab = "ongoing"
+  }
+
+  function moveTask(id, status) {
+    root.tasks = Todos.setStatus(root.tasks, id, status)
     root.persist()
   }
 
@@ -119,7 +125,14 @@ Panel {
   }
 
   function tabCount(value) {
-    return value === "complete" ? root.completeTasks.length : root.ongoingTasks.length
+    if (value === "complete") return root.completeTasks.length
+    if (value === "backlog") return root.backlogTasks.length
+    return root.ongoingTasks.length
+  }
+
+  function tabChipWidth() {
+    var n = root.tabOptions.length
+    return (tabRow.width - Style.space(3) * (n + 1)) / n
   }
 
   function startSearch() {
@@ -166,7 +179,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(560))
+    contentWidth: panel.fittedContentWidth(Style.space(580))
     // availableCardHeight can collapse to 120px when the bar window is
     // screen-sized. Measure the strip itself in that case.
     readonly property real usableCardHeight: {
@@ -201,7 +214,7 @@ Panel {
       }
       onMoveRequested: function(dx, dy) {
         if (dx !== 0) {
-          root.activeTab = dx > 0 ? "complete" : "ongoing"
+          root.activeTab = Todos.cycleTab(root.activeTab, dx)
           return
         }
         listFlick.flick(0, dy > 0 ? -900 : 900)
@@ -279,7 +292,7 @@ Panel {
 
               TabChip {
                 required property var modelData
-                width: (tabRow.width - Style.space(9)) / 2
+                width: root.tabChipWidth()
                 height: parent.height
                 label: modelData.label
                 count: root.tabCount(modelData.value)
@@ -342,6 +355,7 @@ Panel {
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
                 onToggleCompleted: root.toggleCompleted(taskId, !completed)
+                onStatusRequested: function(status) { root.moveTask(taskId, status) }
                 onRemoveRequested: root.removeTask(taskId)
                 onExpandToggled: root.toggleExpanded(taskId)
                 onEditToggled: root.toggleEditing(taskId)
@@ -373,7 +387,7 @@ Panel {
 
             Text {
               textFormat: Text.PlainText
-              text: "NEW TASK"
+              text: root.draftStatus === "backlog" ? "NEW · BACKLOG" : "NEW · ONGOING"
               color: Qt.darker(root.contentForeground, 1.4)
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.caption
@@ -432,7 +446,9 @@ Panel {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Add"
-                tooltipText: "Add this task"
+                tooltipText: root.draftStatus === "backlog"
+                  ? "Add to Backlog"
+                  : "Add to Ongoing"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
                 bordered: true

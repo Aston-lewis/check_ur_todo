@@ -22,7 +22,9 @@ Item {
   readonly property string title: task && task.title ? String(task.title) : ""
   readonly property string description: task && task.description ? String(task.description) : ""
   readonly property string priority: Todos.normalizePriority(task ? task.priority : "")
-  readonly property bool completed: !!(task && task.completed)
+  readonly property string status: Todos.normalizeStatus(task ? task.status : "", task ? task.completed : false)
+  readonly property bool completed: status === "complete"
+  readonly property bool parked: status === "backlog"
   readonly property color accent: Todos.color(editing ? draftPriority : priority)
 
   property string draftTitle: ""
@@ -30,6 +32,7 @@ Item {
   property string draftPriority: "medium"
 
   signal toggleCompleted()
+  signal statusRequested(string status)
   signal removeRequested()
   signal expandToggled()
   signal editToggled()
@@ -73,21 +76,10 @@ Item {
   Rectangle {
     anchors.fill: parent
     radius: Style.cornerRadius
-    color: Util.alpha(root.accent, root.completed ? 0.05 : 0.12)
+    color: Util.alpha(root.foreground, root.completed ? 0.03 : 0.045)
     border.width: 1
-    border.color: Util.alpha(root.accent, root.completed ? 0.18 : 0.32)
+    border.color: Util.alpha(root.foreground, 0.10)
     opacity: root.completed ? 0.78 : 1
-  }
-
-  Rectangle {
-    anchors.left: parent.left
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.topMargin: Style.space(1)
-    anchors.bottomMargin: Style.space(1)
-    width: Style.space(4)
-    radius: width / 2
-    color: root.accent
   }
 
   Item {
@@ -96,19 +88,20 @@ Item {
     anchors.right: parent.right
     anchors.top: parent.top
     anchors.bottom: parent.bottom
-    anchors.leftMargin: Style.space(14)
+    anchors.leftMargin: Style.space(12)
     anchors.rightMargin: Style.space(8)
     anchors.topMargin: Style.space(8)
     anchors.bottomMargin: Style.space(8)
-    implicitHeight: Math.max(check.height, copy.implicitHeight, actions.height)
+    implicitHeight: headerBand.height
+      + (root.editing ? extra.implicitHeight : 0)
+      + ((root.expanded && !root.editing) ? extra.implicitHeight + Style.space(8) : 0)
 
     Item {
       id: check
       width: Style.space(20)
       height: Style.space(20)
       anchors.left: parent.left
-      anchors.top: parent.top
-      anchors.topMargin: Style.space(1)
+      y: root.editing ? 0 : Math.round((headerBand.height - height) / 2)
 
       Rectangle {
         anchors.fill: parent
@@ -138,57 +131,74 @@ Item {
       }
     }
 
-    Column {
-      id: copy
+    Item {
+      id: headerBand
+      visible: !root.editing
       anchors.left: check.right
       anchors.right: actions.left
       anchors.top: parent.top
       anchors.leftMargin: Style.space(10)
       anchors.rightMargin: Style.space(8)
-      spacing: Style.space(8)
+      height: root.editing ? 0 : Math.max(
+        pill.height,
+        titleLabel.implicitHeight,
+        check.height,
+        actions.height
+      )
 
-      Row {
-        visible: !root.editing
-        width: parent.width
-        spacing: Style.space(8)
-
-        Rectangle {
-          id: pill
-          width: pillLabel.implicitWidth + Style.space(10)
-          height: pillLabel.implicitHeight + Style.space(4)
-          radius: height / 2
-          anchors.verticalCenter: parent.verticalCenter
-          color: Util.alpha(root.accent, 0.22)
-          border.width: 1
-          border.color: Util.alpha(root.accent, 0.55)
-
-          Text {
-            id: pillLabel
-            anchors.centerIn: parent
-            textFormat: Text.PlainText
-            text: Todos.label(root.priority).toUpperCase()
-            color: root.accent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: true
-            font.letterSpacing: 0.6
-          }
-        }
+      Rectangle {
+        id: pill
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        width: pillLabel.implicitWidth + Style.space(10)
+        height: pillLabel.implicitHeight + Style.space(4)
+        radius: height / 2
+        color: Util.alpha(root.accent, 0.22)
+        border.width: 1
+        border.color: Util.alpha(root.accent, 0.55)
 
         Text {
+          id: pillLabel
+          anchors.centerIn: parent
           textFormat: Text.PlainText
-          width: Math.max(0, parent.width - pill.width - parent.spacing)
-          anchors.verticalCenter: parent.verticalCenter
-          text: root.title
-          color: root.foreground
+          text: Todos.label(root.priority).toUpperCase()
+          color: root.accent
           font.family: root.fontFamily
-          font.pixelSize: Style.font.subtitle
-          font.bold: !root.completed
-          font.strikeout: root.completed
-          elide: Text.ElideRight
-          wrapMode: Text.NoWrap
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          font.letterSpacing: 0.6
         }
       }
+
+      Text {
+        id: titleLabel
+        anchors.left: pill.right
+        anchors.leftMargin: Style.space(8)
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        height: implicitHeight
+        textFormat: Text.PlainText
+        text: root.title
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.subtitle
+        font.bold: !root.completed
+        font.strikeout: root.completed
+        elide: Text.ElideRight
+        wrapMode: Text.NoWrap
+        verticalAlignment: Text.AlignVCenter
+      }
+    }
+
+    Column {
+      id: extra
+      anchors.left: check.right
+      anchors.right: actions.left
+      anchors.top: headerBand.bottom
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(8)
+      anchors.topMargin: (root.expanded && !root.editing) ? Style.space(8) : 0
+      spacing: Style.space(8)
 
       Text {
         visible: root.expanded && !root.editing
@@ -257,7 +267,7 @@ Item {
     Row {
       id: actions
       anchors.right: parent.right
-      anchors.top: parent.top
+      y: root.editing ? 0 : Math.round((headerBand.height - height) / 2)
       spacing: Style.space(2)
 
       PanelActionButton {
@@ -266,6 +276,15 @@ Item {
         foreground: root.foreground
         fontFamily: root.fontFamily
         onClicked: root.expandToggled()
+      }
+
+      PanelActionButton {
+        visible: !root.completed
+        iconText: root.parked ? "\uF04B" : "\uF04C"
+        tooltipText: root.parked ? "Move to Ongoing" : "Move to Backlog"
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onClicked: root.statusRequested(root.parked ? "ongoing" : "backlog")
       }
 
       PanelActionButton {

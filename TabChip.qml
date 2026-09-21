@@ -27,8 +27,8 @@ Item {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.bottom: parent.bottom
-      anchors.leftMargin: Style.space(10)
-      anchors.rightMargin: Style.space(10)
+      anchors.leftMargin: Style.space(6)
+      anchors.rightMargin: Style.space(6)
       height: 2
       radius: 1
       color: Color.accent
@@ -37,7 +37,7 @@ Item {
 
   Row {
     anchors.centerIn: parent
-    spacing: Style.space(8)
+    spacing: Style.space(6)
 
     Text {
       textFormat: Text.PlainText

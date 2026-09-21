@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "dejan94.todos",
   "name": "Todo List",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "dejan94",
   "license": "MIT",
   "homepage": "https://github.com/dejan994/omarchy-priority-todos",
-  "description": "Bar todo list with four color-coded priorities, search, and in-place edit",
+  "description": "Bar todo list with backlog, ongoing, and completed tabs plus color-coded priorities",
   "kinds": [
     "bar-widget"
   ],
@@ -15,7 +15,7 @@
   },
   "barWidget": {
     "displayName": "Todo List",
-    "description": "Prioritized tasks with search, expand, and edit from the bar",
+    "description": "Prioritized tasks with backlog, search, expand, and edit from the bar",
     "category": "Productivity",
     "allowMultiple": false,
     "defaultSection": "right"
