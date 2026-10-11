@@ -21,6 +21,7 @@ var PRIORITY_OPTIONS = [
   { value: "low", label: "Low" }
 ]
 var TAB_OPTIONS = [
+  { value: "daily", label: "Daily" },
   { value: "backlog", label: "Backlog" },
   { value: "ongoing", label: "Ongoing" },
   { value: "complete", label: "Completed" }
@@ -38,6 +39,15 @@ function tabOptions() {
   return TAB_OPTIONS
 }
 
+function localDateKey(date) {
+  var value = date || new Date()
+  var month = String(value.getMonth() + 1)
+  var day = String(value.getDate())
+  if (month.length < 2) month = "0" + month
+  if (day.length < 2) day = "0" + day
+  return value.getFullYear() + "-" + month + "-" + day
+}
+
 function normalizePriority(value) {
   var priority = String(value || "").toLowerCase()
   if (RANK[priority] !== undefined) return priority
@@ -52,7 +62,7 @@ function normalizeStatus(status, completed) {
 
 function normalizeTab(tab) {
   var value = String(tab || "").toLowerCase()
-  if (value === "backlog" || value === "ongoing" || value === "complete") return value
+  if (value === "daily" || value === "backlog" || value === "ongoing" || value === "complete") return value
   return "ongoing"
 }
 
@@ -130,6 +140,18 @@ function createTask(title, description, priority, status) {
   }
 }
 
+function createDailyTask(title, description) {
+  var now = Date.now()
+  return {
+    id: "daily-" + newId(),
+    title: trim(title),
+    description: trim(description),
+    completed: false,
+    createdAt: now,
+    completedAt: 0
+  }
+}
+
 function normalizeTask(raw) {
   if (!raw || typeof raw !== "object") return null
   var title = trim(raw.title)
@@ -147,21 +169,49 @@ function normalizeTask(raw) {
   }
 }
 
+function normalizeDailyTask(raw) {
+  if (!raw || typeof raw !== "object") return null
+  var title = trim(raw.title)
+  if (title === "") return null
+  return {
+    id: String(raw.id || ("daily-" + newId())),
+    title: title,
+    description: trim(raw.description),
+    completed: raw.completed === true,
+    createdAt: Number(raw.createdAt) || 0,
+    completedAt: Number(raw.completedAt) || 0
+  }
+}
+
 function parseStore(raw) {
-  var empty = { tasks: [], activeTab: "ongoing" }
+  var empty = { tasks: [], dailyTasks: [], dailyResetDate: "", activeTab: "ongoing", valid: true }
   var text = trim(raw)
   if (text === "") return empty
   try {
     var data = JSON.parse(text)
     var list = Array.isArray(data) ? data : (data && Array.isArray(data.tasks) ? data.tasks : [])
+    var dailyList = data && Array.isArray(data.dailyTasks) ? data.dailyTasks : []
     var out = []
+    var dailyOut = []
     for (var i = 0; i < list.length; i++) {
       var task = normalizeTask(list[i])
       if (task) out.push(task)
     }
-    return { tasks: out, activeTab: normalizeTab(data && data.activeTab) }
+    for (var j = 0; j < dailyList.length; j++) {
+      var dailyTask = normalizeDailyTask(dailyList[j])
+      if (dailyTask) dailyOut.push(dailyTask)
+    }
+    return {
+      tasks: out,
+      dailyTasks: dailyOut,
+      dailyResetDate: data && /^\d{4}-\d{2}-\d{2}$/.test(String(data.dailyResetDate || ""))
+        ? String(data.dailyResetDate)
+        : "",
+      activeTab: normalizeTab(data && data.activeTab),
+      valid: true
+    }
   } catch (e) {
-    return empty
+    return { tasks: [], dailyTasks: [], dailyResetDate: "", activeTab: "ongoing", valid: false }
   }
 }
 
@@ -169,11 +219,13 @@ function parse(raw) {
   return parseStore(raw).tasks
 }
 
-function serialize(tasks, activeTab) {
+function serialize(tasks, activeTab, dailyTasks, dailyResetDate) {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     activeTab: normalizeTab(activeTab),
-    tasks: tasks || []
+    tasks: tasks || [],
+    dailyTasks: dailyTasks || [],
+    dailyResetDate: String(dailyResetDate || "")
   }, null, 2) + "\n"
 }
 
@@ -209,7 +261,30 @@ function listed(tasks, query, status) {
   return out
 }
 
+function listedDaily(tasks, query) {
+  var list = tasks || []
+  var out = []
+  var needle = trim(query).toLowerCase()
+  for (var i = 0; i < list.length; i++) {
+    var task = list[i]
+    if (!task) continue
+    if (needle !== ""
+        && String(task.title || "").toLowerCase().indexOf(needle) < 0
+        && String(task.description || "").toLowerCase().indexOf(needle) < 0) continue
+    out.push(task)
+  }
+  out.sort(function(a, b) {
+    return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0)
+  })
+  return out
+}
+
 function add(tasks, task) {
+  if (!task || !task.title) return tasks || []
+  return [task].concat(tasks || [])
+}
+
+function addDaily(tasks, task) {
   if (!task || !task.title) return tasks || []
   return [task].concat(tasks || [])
 }
@@ -251,6 +326,18 @@ function setCompleted(tasks, id, completed) {
   return setStatus(tasks, id, completed === true ? "complete" : "ongoing")
 }
 
+function setDailyCompleted(tasks, id, completed) {
+  var value = completed === true
+  return mapTasks(tasks, id, function(task) {
+    if ((task.completed === true) === value) return task
+    var next = {}
+    for (var key in task) next[key] = task[key]
+    next.completed = value
+    next.completedAt = value ? Date.now() : 0
+    return next
+  })
+}
+
 function remove(tasks, id) {
   var list = tasks || []
   var out = []
@@ -258,6 +345,10 @@ function remove(tasks, id) {
     if (list[i] && list[i].id !== id) out.push(list[i])
   }
   return out
+}
+
+function removeDaily(tasks, id) {
+  return remove(tasks, id)
 }
 
 function removeCompleted(tasks) {
@@ -284,6 +375,51 @@ function updateTask(tasks, id, title, description, priority) {
       priority: nextPriority
     })
   })
+}
+
+function updateDailyTask(tasks, id, title, description) {
+  var nextTitle = trim(title)
+  var nextDescription = trim(description)
+  if (nextTitle === "") return tasks || []
+  return mapTasks(tasks, id, function(task) {
+    if (task.title === nextTitle && task.description === nextDescription) return task
+    var next = {}
+    for (var key in task) next[key] = task[key]
+    next.title = nextTitle
+    next.description = nextDescription
+    return next
+  })
+}
+
+function resetDailyTasks(tasks) {
+  var list = tasks || []
+  var out = []
+  var changed = false
+  for (var i = 0; i < list.length; i++) {
+    var task = list[i]
+    if (!task || task.completed !== true) {
+      out.push(task)
+      continue
+    }
+    var next = {}
+    for (var key in task) next[key] = task[key]
+    next.completed = false
+    next.completedAt = 0
+    out.push(next)
+    changed = true
+  }
+  return changed ? out : list
+}
+
+function rollDailyTasks(tasks, previousDate, currentDate) {
+  var date = String(currentDate || "")
+  if (String(previousDate || "") === date)
+    return { tasks: tasks || [], dailyResetDate: date, changed: false }
+  return {
+    tasks: resetDailyTasks(tasks),
+    dailyResetDate: date,
+    changed: true
+  }
 }
 
 function countStatus(tasks, status) {
@@ -319,6 +455,8 @@ function highestOngoing(tasks) {
 function emptyMessage(query, activeTab, taskCount) {
   if (trim(query) !== "")
     return "No tasks match \u201c" + query + "\u201d"
+  if (activeTab === "daily")
+    return taskCount === 0 ? "No daily tasks yet" : "No daily tasks match"
   if (activeTab === "complete")
     return "Nothing completed yet"
   if (activeTab === "backlog")
@@ -327,11 +465,11 @@ function emptyMessage(query, activeTab, taskCount) {
 }
 
 function badgeTooltip(count, highest) {
-  if (count <= 0) return "Todo List"
+  if (count <= 0) return "Todo List (Daily)"
   var head = count === 1 ? "1 ongoing" : count + " ongoing"
   if (highest === "critical" || highest === "high")
-    return head + " · " + label(highest)
-  return head
+    return head + " · " + label(highest) + " · Daily"
+  return head + " · Daily"
 }
 
 function cloneIdMap(map) {

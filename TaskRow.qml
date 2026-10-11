@@ -15,6 +15,7 @@ Item {
 
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
+  property bool daily: false
   property bool expanded: false
   property bool editing: false
 
@@ -23,9 +24,9 @@ Item {
   readonly property string description: task && task.description ? String(task.description) : ""
   readonly property string priority: Todos.normalizePriority(task ? task.priority : "")
   readonly property string status: Todos.normalizeStatus(task ? task.status : "", task ? task.completed : false)
-  readonly property bool completed: status === "complete"
+  readonly property bool completed: root.daily ? task && task.completed === true : status === "complete"
   readonly property bool parked: status === "backlog"
-  readonly property color accent: Todos.color(editing ? draftPriority : priority)
+  readonly property color accent: root.daily ? Color.accent : Todos.color(editing ? draftPriority : priority)
   readonly property bool chromeVisible: rowHover.hovered || expanded || editing
 
   property string draftTitle: ""
@@ -97,7 +98,7 @@ Item {
     anchors.rightMargin: Style.space(8)
     anchors.topMargin: Style.space(8)
     anchors.bottomMargin: Style.space(8)
-    readonly property real firstRowHeight: Math.max(pill.height, check.height, actions.height)
+    readonly property real firstRowHeight: Math.max(root.daily ? 0 : pill.height, check.height, actions.height)
 
     implicitHeight: headerBand.height
       + (root.editing ? extra.implicitHeight : 0)
@@ -153,6 +154,7 @@ Item {
 
       Rectangle {
         id: pill
+        visible: !root.daily
         x: 0
         y: Math.round((body.firstRowHeight - height) / 2)
         width: pillLabel.implicitWidth + Style.space(10)
@@ -177,8 +179,8 @@ Item {
 
       Text {
         id: titleLabel
-        anchors.left: pill.right
-        anchors.leftMargin: Style.space(8)
+        anchors.left: root.daily ? parent.left : pill.right
+        anchors.leftMargin: root.daily ? 0 : Style.space(8)
         anchors.right: parent.right
         anchors.rightMargin: actions.width
         y: {
@@ -266,6 +268,7 @@ Item {
         }
 
         Flow {
+          visible: !root.daily
           width: parent.width
           spacing: Style.space(6)
 
@@ -310,7 +313,7 @@ Item {
       }
 
       PanelActionButton {
-        visible: !root.completed
+        visible: !root.daily && !root.completed
         iconText: root.parked ? "\uF04B" : "\uF04C"
         tooltipText: root.parked ? "Move to Ongoing" : "Move to Backlog"
         foreground: root.foreground
@@ -327,11 +330,13 @@ Item {
       }
 
       PanelActionButton {
-        iconText: "\u2715"
-        tooltipText: "Remove task"
+        iconText: root.daily ? "Delete" : "\u2715"
+        tooltipText: root.daily ? "Delete daily task" : "Remove task"
         foreground: root.foreground
         hoverColor: Color.urgent
         fontFamily: root.fontFamily
+        fontSize: root.daily ? Style.font.caption : Style.font.icon
+        size: root.daily ? Style.space(52) : Math.max(Style.space(22), Style.font.icon + Style.spacing.sm * 2)
         onClicked: root.removeRequested()
       }
     }

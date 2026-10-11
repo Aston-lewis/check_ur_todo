@@ -26,13 +26,17 @@ Panel {
   property string query: ""
   property string draftPriority: "medium"
   property string activeTab: "ongoing"
+  property var dailyTasks: []
+  property string dailyResetDate: ""
   property var expandedIds: ({})
   property var editingIds: ({})
 
   readonly property var backlogTasks: Todos.listed(tasks, query, "backlog")
   readonly property var ongoingTasks: Todos.listed(tasks, query, "ongoing")
   readonly property var completeTasks: Todos.listed(tasks, query, "complete")
-  readonly property var visibleTasks: Todos.listed(tasks, query, activeTab)
+  readonly property var visibleTasks: activeTab === "daily"
+    ? Todos.listedDaily(dailyTasks, query)
+    : Todos.listed(tasks, query, activeTab)
   readonly property int ongoingCount: Todos.ongoingCount(tasks)
   readonly property string highestOngoing: Todos.highestOngoing(tasks)
   readonly property color badgeColor: highestOngoing !== "" ? Todos.color(highestOngoing) : Color.accent
@@ -53,11 +57,34 @@ Panel {
 
   function persist() {
     if (!root.storeReady) return
+    root.applyDailyRollover()
     applyingOwnWrite = true
-    storeFile.setText(Todos.serialize(root.tasks, root.activeTab))
+    storeFile.setText(Todos.serialize(root.tasks, root.activeTab, root.dailyTasks, root.dailyResetDate))
+  }
+
+  function applyDailyRollover() {
+    var today = Todos.localDateKey()
+    var result = Todos.rollDailyTasks(root.dailyTasks, root.dailyResetDate, today)
+    if (!result.changed) return false
+    root.dailyTasks = result.tasks
+    root.dailyResetDate = result.dailyResetDate
+    return true
   }
 
   function addTask() {
+    if (root.activeTab === "daily") {
+      var dailyTask = Todos.createDailyTask(titleField.text, descriptionField.text)
+      if (!dailyTask.title) {
+        titleField.forceActiveFocus()
+        return
+      }
+      root.dailyTasks = Todos.addDaily(root.dailyTasks, dailyTask)
+      root.persist()
+      titleField.text = ""
+      descriptionField.text = ""
+      Qt.callLater(function() { titleField.forceActiveFocus() })
+      return
+    }
     var status = root.draftStatus
     var task = Todos.createTask(titleField.text, descriptionField.text, root.draftPriority, status)
     if (!task.title) {
@@ -73,7 +100,10 @@ Panel {
   }
 
   function toggleCompleted(id, completed) {
-    root.tasks = Todos.setCompleted(root.tasks, id, completed)
+    if (root.activeTab === "daily")
+      root.dailyTasks = Todos.setDailyCompleted(root.dailyTasks, id, completed)
+    else
+      root.tasks = Todos.setCompleted(root.tasks, id, completed)
     root.persist()
   }
 
@@ -83,7 +113,10 @@ Panel {
   }
 
   function removeTask(id) {
-    root.tasks = Todos.remove(root.tasks, id)
+    if (root.activeTab === "daily")
+      root.dailyTasks = Todos.removeDaily(root.dailyTasks, id)
+    else
+      root.tasks = Todos.remove(root.tasks, id)
     root.persist()
   }
 
@@ -95,9 +128,15 @@ Panel {
   }
 
   function editTask(id, title, description, priority) {
-    var next = Todos.updateTask(root.tasks, id, title, description, priority)
-    if (next === root.tasks) return
-    root.tasks = next
+    if (root.activeTab === "daily") {
+      var nextDaily = Todos.updateDailyTask(root.dailyTasks, id, title, description)
+      if (nextDaily === root.dailyTasks) return
+      root.dailyTasks = nextDaily
+    } else {
+      var next = Todos.updateTask(root.tasks, id, title, description, priority)
+      if (next === root.tasks) return
+      root.tasks = next
+    }
     root.persist()
   }
 
@@ -136,6 +175,7 @@ Panel {
   }
 
   function tabCount(value) {
+    if (value === "daily") return Todos.listedDaily(root.dailyTasks, root.query).length
     if (value === "complete") return root.completeTasks.length
     if (value === "backlog") return root.backlogTasks.length
     return root.ongoingTasks.length
@@ -166,6 +206,13 @@ Panel {
     if (root.storeReady) root.persist()
   }
 
+  Timer {
+    interval: 60000
+    running: true
+    repeat: true
+    onTriggered: if (root.storeReady && root.applyDailyRollover()) root.persist()
+  }
+
   FileView {
     id: storeFile
     path: root.storePath
@@ -178,13 +225,22 @@ Panel {
         return
       }
       var store = Todos.parseStore(text())
+      if (!store.valid) {
+        console.warn("dejan94.todos: refusing to overwrite an invalid todos.json store")
+        return
+      }
       root.tasks = store.tasks
+      root.dailyTasks = store.dailyTasks
+      root.dailyResetDate = store.dailyResetDate
       root.activeTab = store.activeTab
       root.storeReady = true
+      if (root.applyDailyRollover()) root.persist()
     }
     onLoadFailed: {
       root.applyingOwnWrite = false
       root.tasks = []
+      root.dailyTasks = []
+      root.dailyResetDate = Todos.localDateKey()
       root.storeReady = true
     }
     onFileChanged: if (!root.applyingOwnWrite) reload()
@@ -353,7 +409,11 @@ Panel {
               topPadding: Style.space(12)
               bottomPadding: Style.space(12)
               wrapMode: Text.WordWrap
-              text: Todos.emptyMessage(root.query, root.activeTab, root.tasks.length)
+              text: Todos.emptyMessage(
+                root.query,
+                root.activeTab,
+                root.activeTab === "daily" ? root.dailyTasks.length : root.tasks.length
+              )
               color: Qt.darker(root.contentForeground, 1.5)
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.body
@@ -367,6 +427,7 @@ Panel {
                 required property var modelData
                 width: parent.width
                 task: modelData
+                daily: root.activeTab === "daily"
                 expanded: root.isExpanded(String(modelData.id || ""))
                 editing: root.isEditing(String(modelData.id || ""))
                 priorityOptions: root.priorityOptions
@@ -424,7 +485,9 @@ Panel {
             TextField {
               id: titleField
               width: parent.width
-              placeholderText: root.draftStatus === "backlog" ? "Add to Backlog" : "Add a task"
+              placeholderText: root.activeTab === "daily"
+                ? "Add a daily task"
+                : (root.draftStatus === "backlog" ? "Add to Backlog" : "Add a task")
               foreground: root.contentForeground
               font.family: root.contentFontFamily
               onAccepted: root.addTask()
@@ -453,10 +516,13 @@ Panel {
             Item {
               visible: root.composerOpen
               width: parent.width
-              height: visible ? Math.max(chipRow.implicitHeight, addButton.implicitHeight) : 0
+              height: visible
+                ? (root.activeTab === "daily" ? addButton.implicitHeight : Math.max(chipRow.implicitHeight, addButton.implicitHeight))
+                : 0
 
               Flow {
                 id: chipRow
+                visible: root.activeTab !== "daily"
                 anchors.left: parent.left
                 anchors.right: addButton.left
                 anchors.rightMargin: Style.space(10)
@@ -482,9 +548,9 @@ Panel {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Add"
-                tooltipText: root.draftStatus === "backlog"
-                  ? "Add to Backlog"
-                  : "Add to Ongoing"
+                tooltipText: root.activeTab === "daily"
+                  ? "Add daily task"
+                  : (root.draftStatus === "backlog" ? "Add to Backlog" : "Add to Ongoing")
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
                 bordered: true

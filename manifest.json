@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "id": "dejan94.todos",
-  "name": "Todo List",
-  "version": "1.4.0",
+  "name": "Todo List (Daily)",
+  "version": "1.4.1",
   "author": "dejan94",
   "license": "MIT",
   "homepage": "https://github.com/dejan994/omarchy-priority-todos",
-  "description": "Bar todo list with backlog, ongoing, and completed tabs plus color-coded priorities",
+  "description": "Bar todo list with daily recurring tasks, backlog, ongoing, completed, and color-coded priorities",
   "kinds": [
     "bar-widget"
   ],
@@ -14,8 +14,8 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Todo List",
-    "description": "Prioritized tasks with backlog, search, expand, and edit from the bar",
+    "displayName": "Todo List (Daily)",
+    "description": "Daily and prioritized tasks with search, expand, and edit from the bar",
     "category": "Productivity",
     "allowMultiple": false,
     "defaultSection": "right"

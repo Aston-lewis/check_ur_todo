@@ -35,19 +35,23 @@ That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
 - **Four priorities**, colour-coded on the checkbox and the priority pill:
   Critical red, High orange, Medium yellow, Low blue. The bar badge uses the
   highest *ongoing* colour; backlog items do not count toward it.
-- **Backlog, Ongoing, and Completed** as three tabs. Each list sorts Critical
-  first, then High, Medium, Low. New tasks land on the tab you are looking at
+- **Daily, Backlog, Ongoing, and Completed** as four tabs. Daily tasks keep
+  their title and description and reset to incomplete on the next local
+  calendar day; completed daily tasks stay visible until deleted. Backlog,
+  Ongoing, and Completed keep their existing behavior and sort Critical first,
+  then High, Medium, Low. New normal tasks land on the tab you are looking at
   (Ongoing if you are on Completed). Play starts a backlog item; pause parks
   an ongoing item. The circle marks a task complete. The last tab you used
   is remembered.
 - **Search** from the field at the top, or press `/` with the panel open.
 - **Add** from the field at the bottom. Focus it (or press `n`) to reveal
-  description, priority, and Add. Enter adds the task. Shift+Enter starts a
-  new line in the description.
+  description and Add; normal tasks also offer priority selection. Enter adds
+  the task. Shift+Enter starts a new line in the description.
 - **Click a row** to expand the title and description. Hover a row for edit,
-  park/start, and remove. The pencil still opens in-place edit. × removes it.
+  park/start, and remove. Daily tasks show a labeled Delete action.
+  The pencil still opens in-place edit. × removes normal tasks.
 - **Completed** is quieter. **Clear** at the bottom right of that tab
-  removes every finished task.
+  removes every finished normal task.
 
 | Backlog | Completed |
 | --- | --- |
@@ -59,7 +63,7 @@ That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
 | --- | --- |
 | `n` | Focus the add field |
 | `/` | Focus search |
-| Left / Right | Cycle Backlog, Ongoing, Completed |
+| Left / Right | Cycle Daily, Backlog, Ongoing, Completed |
 | Enter | Add or save |
 | Shift+Enter | New line in a description |
 | Escape | Leave a field, then close the panel |
