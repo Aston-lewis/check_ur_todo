@@ -12,7 +12,7 @@ are no extra packages and no network use.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/dejan994/omarchy-priority-todos.git --enable
+omarchy plugin add https://github.com/Aston-lewis/check_ur_todo.git --enable
 ```
 
 Place it on the bar if the installer does not. Restart the shell once if the
@@ -53,9 +53,11 @@ That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
 - **Completed** is quieter. **Clear** at the bottom right of that tab
   removes every finished normal task.
 
-| Backlog | Completed |
-| --- | --- |
-| ![Backlog tab](screenshots/backlog.png) | ![Completed tab](screenshots/completed.png) |
+|Daily | Backlog | Completed |
+| --- | --- | --- |
+| ![Daily tab](screenshots/daily.png) | ![Backlog tab](screenshots/backlog.png) | ![Completed tab](screenshots/completed.png) |
+
+
 
 ## Keyboard
 
@@ -67,6 +69,12 @@ That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
 | Enter | Add or save |
 | Shift+Enter | New line in a description |
 | Escape | Leave a field, then close the panel |
+
+## Credits
+
+This project is based on [omarchy-priority-todos](https://github.com/dejan994/omarchy-priority-todos) by [Dejan V.](https://github.com/dejan994).
+
+The original project is licensed under the MIT License. This version includes customizations and additional features, including a Daily Todo tab with automatic daily reset.
 
 ## License
 
