@@ -53,9 +53,13 @@ That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
 - **Completed** is quieter. **Clear** at the bottom right of that tab
   removes every finished normal task.
 
-|Daily | Backlog | Completed |
-| --- | --- | --- |
+|Daily | Backlog |
+| --- | --- |
 | ![Daily tab](screenshots/daily.png) | ![Backlog tab](screenshots/backlog.png) | ![Completed tab](screenshots/completed.png) |
+
+|Completed |
+| --- |
+| ![Completed tab](screenshots/completed.png) |
 
 
 
