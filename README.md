@@ -25,7 +25,7 @@ omarchy restart shell
 ## Remove
 
 ```bash
-omarchy plugin remove dejan94.todos
+omarchy plugin remove aston.todos
 ```
 
 That removes the widget. It does not delete `~/.local/state/omarchy/todos.json`.
