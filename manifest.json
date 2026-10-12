@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "dejan94.todos",
+  "id": "aston.todos",
   "name": "Todo List (Daily)",
   "version": "1.4.1",
-  "author": "dejan94",
+  "author": "Aston lewis",
   "license": "MIT",
-  "homepage": "https://github.com/dejan994/omarchy-priority-todos",
+  "homepage": "https://github.com/Aston-lewis/check_ur_todo",
   "description": "Bar todo list with daily recurring tasks, backlog, ongoing, completed, and color-coded priorities",
   "kinds": [
     "bar-widget"
