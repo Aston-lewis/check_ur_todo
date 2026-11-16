@@ -76,6 +76,15 @@ Panel {
     storeFile.setText(Todos.serialize(root.tasks, root.activeTab, root.dailyTasks, root.dailyResetDate, root.sortMode))
   }
 
+  function setSortMode(mode) {
+    var nextMode = Todos.normalizeSortMode(mode)
+    if (root.sortMode === nextMode) return
+    root.sortMode = nextMode
+    // Rebuild the task model so it is immediately sorted by the selected mode.
+    root.tasks = root.tasks.slice()
+    root.persist()
+  }
+
   function applyDailyRollover() {
     var today = Todos.localDateKey()
     var result = Todos.rollDailyTasks(root.dailyTasks, root.dailyResetDate, today)
@@ -390,11 +399,9 @@ Panel {
         } else if (text === "n" || text === "N") {
             root.startAdd()
         } else if (text === "p" || text === "P") {
-            root.sortMode = "priority"
-            root.persist()
+            root.setSortMode("priority")
         } else if (text === "m" || text === "M") {
-            root.sortMode = "manual"
-            root.persist()
+            root.setSortMode("manual")
         }
       }
       onMoveRequested: function(dx, dy) {
