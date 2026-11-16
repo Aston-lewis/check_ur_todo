@@ -19,6 +19,8 @@ Item {
   property bool expanded: false
   property bool editing: false
   property bool manualMode: false
+  property bool dragHidden: false
+  property real previewOffset: 0
 
   readonly property string taskId: task && task.id ? String(task.id) : ""
   readonly property string title: task && task.title ? String(task.title) : ""
@@ -46,6 +48,18 @@ Item {
 
   implicitHeight: body.implicitHeight + Style.space(16)
   height: implicitHeight
+  opacity: root.dragHidden ? 0 : 1
+
+  Behavior on opacity {
+    NumberAnimation { duration: Style.duration(100); easing.type: Easing.OutCubic }
+  }
+
+  transform: Translate {
+    y: root.previewOffset
+    Behavior on y {
+      NumberAnimation { duration: Style.duration(150); easing.type: Easing.OutCubic }
+    }
+  }
 
   function loadDrafts() {
     draftTitle = title
