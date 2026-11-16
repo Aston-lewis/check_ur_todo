@@ -31,6 +31,8 @@ Panel {
   property string dailyResetDate: ""
   property var expandedIds: ({})
   property var editingIds: ({})
+  property string draggingTaskId: ""
+  property real dragPointerY: 0
 
   readonly property var backlogTasks: Todos.listed(tasks, query, "backlog", root.sortMode)
   readonly property var ongoingTasks: Todos.listed(tasks, query, "ongoing", root.sortMode)
@@ -111,6 +113,52 @@ Panel {
   function moveTask(id, status) {
     root.tasks = Todos.setStatus(root.tasks, id, status)
     root.persist()
+  }
+
+  function startReorder(id, y) {
+    if (root.sortMode !== "manual" || root.activeTab === "daily" || root.query !== "") return
+    root.draggingTaskId = id
+    root.dragPointerY = listColumn.mapFromItem(null, Qt.point(0, y)).y
+  }
+
+  function updateReorder(y) {
+    if (root.draggingTaskId === "") return
+    root.dragPointerY = listColumn.mapFromItem(null, Qt.point(0, y)).y
+  }
+
+  function finishReorder(y) {
+    if (root.draggingTaskId === "") return
+    y = listColumn.mapFromItem(null, Qt.point(0, y)).y
+    root.dragPointerY = y
+    var ordered = Todos.listed(root.tasks, "", root.activeTab, "manual")
+    var from = -1
+    var to = ordered.length - 1
+    for (var i = 0; i < ordered.length; i++) {
+      if (String(ordered[i].id) === root.draggingTaskId) from = i
+    }
+    for (var j = 0; j < ordered.length; j++) {
+      var row = taskRepeater.itemAt(j)
+      if (row && y < row.y + row.height / 2) { to = j; break }
+    }
+    if (from >= 0 && to >= 0 && from !== to) {
+      var moved = ordered.splice(from, 1)[0]
+      ordered.splice(to, 0, moved)
+      var next = root.tasks.slice()
+      for (var k = 0; k < ordered.length; k++) {
+        for (var m = 0; m < next.length; m++) {
+          if (String(next[m].id) === String(ordered[k].id)) {
+            var copy = {}
+            for (var key in next[m]) copy[key] = next[m][key]
+            copy.sortOrder = k + 1
+            next[m] = copy
+            break
+          }
+        }
+      }
+      root.tasks = next
+      root.persist()
+    }
+    root.draggingTaskId = ""
   }
 
   function removeTask(id) {
@@ -432,6 +480,7 @@ Panel {
             }
 
             Repeater {
+              id: taskRepeater
               model: root.visibleTasks
 
               TaskRow {
@@ -439,6 +488,7 @@ Panel {
                 width: parent.width
                 task: modelData
                 daily: root.activeTab === "daily"
+                manualMode: root.sortMode === "manual"
                 expanded: root.isExpanded(String(modelData.id || ""))
                 editing: root.isEditing(String(modelData.id || ""))
                 priorityOptions: root.priorityOptions
@@ -452,6 +502,41 @@ Panel {
                 onEditRequested: function(title, description, priority) {
                   root.editTask(taskId, title, description, priority)
                 }
+                onReorderStarted: function(id, y) { root.startReorder(id, y) }
+                onReorderMoved: function(y) { root.updateReorder(y) }
+                onReorderFinished: function(y) { root.finishReorder(y) }
+              }
+            }
+
+            Rectangle {
+              visible: root.draggingTaskId !== ""
+              z: 10
+              implicitHeight: 0
+              x: Style.space(4)
+              y: root.dragPointerY - height / 2
+              width: listColumn.width - Style.space(8)
+              height: Style.space(42)
+              radius: Style.cornerRadius
+              color: Util.alpha(root.contentForeground, 0.16)
+              border.width: 1
+              border.color: Color.accent
+
+              Text {
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(12)
+                anchors.rightMargin: Style.space(12)
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+                text: {
+                  for (var i = 0; i < root.tasks.length; i++)
+                    if (String(root.tasks[i].id) === root.draggingTaskId) return root.tasks[i].title
+                  return ""
+                }
+                color: root.contentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
               }
             }
 

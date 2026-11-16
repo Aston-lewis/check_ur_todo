@@ -18,6 +18,7 @@ Item {
   property bool daily: false
   property bool expanded: false
   property bool editing: false
+  property bool manualMode: false
 
   readonly property string taskId: task && task.id ? String(task.id) : ""
   readonly property string title: task && task.title ? String(task.title) : ""
@@ -39,6 +40,9 @@ Item {
   signal expandToggled()
   signal editToggled()
   signal editRequested(string title, string description, string priority)
+  signal reorderStarted(string id, real y)
+  signal reorderMoved(real y)
+  signal reorderFinished(real y)
 
   implicitHeight: body.implicitHeight + Style.space(16)
   height: implicitHeight
@@ -77,6 +81,20 @@ Item {
 
   HoverHandler {
     id: rowHover
+  }
+
+  DragHandler {
+    id: reorderDrag
+    enabled: root.manualMode && !root.daily && !root.editing
+    target: null
+    grabPermissions: PointerHandler.TakeOverForbidden
+    onActiveChanged: {
+      if (active) root.reorderStarted(root.taskId, centroid.scenePosition.y)
+      else root.reorderFinished(centroid.scenePosition.y)
+    }
+    onCentroidChanged: {
+      if (active) root.reorderMoved(centroid.scenePosition.y)
+    }
   }
 
   Rectangle {
