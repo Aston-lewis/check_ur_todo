@@ -26,17 +26,18 @@ Panel {
   property string query: ""
   property string draftPriority: "medium"
   property string activeTab: "ongoing"
+  property string sortMode: "priority"
   property var dailyTasks: []
   property string dailyResetDate: ""
   property var expandedIds: ({})
   property var editingIds: ({})
 
-  readonly property var backlogTasks: Todos.listed(tasks, query, "backlog")
-  readonly property var ongoingTasks: Todos.listed(tasks, query, "ongoing")
-  readonly property var completeTasks: Todos.listed(tasks, query, "complete")
+  readonly property var backlogTasks: Todos.listed(tasks, query, "backlog", root.sortMode)
+  readonly property var ongoingTasks: Todos.listed(tasks, query, "ongoing", root.sortMode)
+  readonly property var completeTasks: Todos.listed(tasks, query, "complete", root.sortMode)
   readonly property var visibleTasks: activeTab === "daily"
     ? Todos.listedDaily(dailyTasks, query)
-    : Todos.listed(tasks, query, activeTab)
+    : Todos.listed(tasks, query, activeTab, root.sortMode)
   readonly property int ongoingCount: Todos.ongoingCount(tasks)
   readonly property string highestOngoing: Todos.highestOngoing(tasks)
   readonly property color badgeColor: highestOngoing !== "" ? Todos.color(highestOngoing) : Color.accent
@@ -59,7 +60,7 @@ Panel {
     if (!root.storeReady) return
     root.applyDailyRollover()
     applyingOwnWrite = true
-    storeFile.setText(Todos.serialize(root.tasks, root.activeTab, root.dailyTasks, root.dailyResetDate))
+    storeFile.setText(Todos.serialize(root.tasks, root.activeTab, root.dailyTasks, root.dailyResetDate, root.sortMode))
   }
 
   function applyDailyRollover() {
@@ -233,6 +234,7 @@ Panel {
       root.dailyTasks = store.dailyTasks
       root.dailyResetDate = store.dailyResetDate
       root.activeTab = store.activeTab
+      root.sortMode = store.sortMode
       root.storeReady = true
       if (root.applyDailyRollover()) root.persist()
     }
@@ -283,8 +285,17 @@ Panel {
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
-        if (text === "/") root.startSearch()
-        else if (text === "n" || text === "N") root.startAdd()
+        if (text === "/") {
+            root.startSearch()
+        } else if (text === "n" || text === "N") {
+            root.startAdd()
+        } else if (text === "p" || text === "P") {
+            root.sortMode = "priority"
+            root.persist()
+        } else if (text === "m" || text === "M") {
+            root.sortMode = "manual"
+            root.persist()
+        }
       }
       onMoveRequested: function(dx, dy) {
         if (dx !== 0) {
@@ -321,7 +332,7 @@ Panel {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: "n add  ·  / search"
+            text: "n add · / search · p priority · m manual"
             color: Qt.darker(root.contentForeground, 1.55)
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
