@@ -443,7 +443,7 @@ Panel {
             color: Qt.darker(root.contentForeground, 1.55)
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
-          }
+          }          
         }
 
         TextField {
@@ -502,7 +502,7 @@ Panel {
           width: parent.width
           readonly property int cap: {
             var chrome = header.height + searchField.implicitHeight + tabRow.height
-                       + composer.implicitHeight + content.spacing * 4
+                       + composer.implicitHeight + modeFooter.implicitHeight + content.spacing * 5
             return Math.max(Style.space(72), Math.round(panel.maxCardHeight - panel.verticalContentInset - chrome))
           }
           height: Math.min(Math.max(listColumn.implicitHeight, Style.space(48)), cap)
@@ -775,6 +775,19 @@ Panel {
             }
           }
         }
+        
+        Text {
+          id: modeFooter
+          width: parent.width
+          textFormat: Text.PlainText
+          horizontalAlignment: Text.AlignRight
+          text: root.sortMode === "manual" ? "manual" : "priority"
+          color: root.sortMode === "manual" ? "#3D9B68" : "#E24B4A"
+          font.family: root.contentFontFamily
+          font.pointSize: 7
+          font.bold: true
+        }
+        
       }
     }
   }
