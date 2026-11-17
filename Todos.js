@@ -48,6 +48,10 @@ function localDateKey(date) {
   return value.getFullYear() + "-" + month + "-" + day
 }
 
+function normalizeSortMode(mode) {
+    return mode === "manual" ? "manual" : "priority"
+}
+
 function normalizePriority(value) {
   var priority = String(value || "").toLowerCase()
   if (RANK[priority] !== undefined) return priority
@@ -113,6 +117,7 @@ function copyTask(task, overrides) {
     priority: task.priority,
     status: status,
     completed: status === "complete",
+    sortOrder: Number(task.sortOrder) || 0,
     createdAt: task.createdAt,
     completedAt: task.completedAt
   }
@@ -134,6 +139,7 @@ function createTask(title, description, priority, status) {
     description: trim(description),
     priority: normalizePriority(priority),
     status: nextStatus,
+    sortOrder: 0,
     completed: false,
     createdAt: now,
     completedAt: 0
@@ -163,6 +169,7 @@ function normalizeTask(raw) {
     description: trim(raw.description),
     priority: normalizePriority(raw.priority),
     status: status,
+    sortOrder: Number(raw.sortOrder) || 0,
     completed: status === "complete",
     createdAt: Number(raw.createdAt) || 0,
     completedAt: Number(raw.completedAt) || 0
@@ -203,6 +210,7 @@ function parseStore(raw) {
     }
     return {
       tasks: out,
+      sortMode: normalizeSortMode(data && data.sortMode),
       dailyTasks: dailyOut,
       dailyResetDate: data && /^\d{4}-\d{2}-\d{2}$/.test(String(data.dailyResetDate || ""))
         ? String(data.dailyResetDate)
@@ -211,7 +219,7 @@ function parseStore(raw) {
       valid: true
     }
   } catch (e) {
-    return { tasks: [], dailyTasks: [], dailyResetDate: "", activeTab: "ongoing", valid: false }
+    return { tasks: [], sortMode: "priority", dailyTasks: [], dailyResetDate: "", activeTab: "ongoing", valid: false }
   }
 }
 
@@ -219,13 +227,14 @@ function parse(raw) {
   return parseStore(raw).tasks
 }
 
-function serialize(tasks, activeTab, dailyTasks, dailyResetDate) {
+function serialize(tasks, activeTab, dailyTasks, dailyResetDate, sortMode) {
   return JSON.stringify({
     version: 2,
     activeTab: normalizeTab(activeTab),
     tasks: tasks || [],
     dailyTasks: dailyTasks || [],
-    dailyResetDate: String(dailyResetDate || "")
+    dailyResetDate: String(dailyResetDate || ""),
+    sortMode: normalizeSortMode(sortMode)
   }, null, 2) + "\n"
 }
 
@@ -246,7 +255,20 @@ function compareTasks(a, b) {
   return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0)
 }
 
-function listed(tasks, query, status) {
+// Ordering manually
+function compareManual(a, b) {
+    var orderDelta =
+        (Number(a.sortOrder) || 0) -
+        (Number(b.sortOrder) || 0)
+
+    if (orderDelta !== 0)
+        return orderDelta
+
+    return (Number(b.createdAt) || 0) -
+           (Number(a.createdAt) || 0)
+}
+
+function listed(tasks, query, status, sortMode) {
   var list = tasks || []
   var want = normalizeStatus(status, false)
   var out = []
@@ -257,7 +279,11 @@ function listed(tasks, query, status) {
     if (!matches(task, query)) continue
     out.push(task)
   }
-  out.sort(compareTasks)
+  if (normalizeSortMode(sortMode) === "manual")
+    out.sort(compareManual)
+  else
+    out.sort(compareTasks)
+
   return out
 }
 

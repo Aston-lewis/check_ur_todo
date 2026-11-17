@@ -18,6 +18,9 @@ Item {
   property bool daily: false
   property bool expanded: false
   property bool editing: false
+  property bool manualMode: false
+  property bool dragHidden: false
+  property real previewOffset: 0
 
   readonly property string taskId: task && task.id ? String(task.id) : ""
   readonly property string title: task && task.title ? String(task.title) : ""
@@ -39,9 +42,24 @@ Item {
   signal expandToggled()
   signal editToggled()
   signal editRequested(string title, string description, string priority)
+  signal reorderStarted(string id, real y)
+  signal reorderMoved(real y)
+  signal reorderFinished(real y)
 
   implicitHeight: body.implicitHeight + Style.space(16)
   height: implicitHeight
+  opacity: root.dragHidden ? 0 : 1
+
+  Behavior on opacity {
+    NumberAnimation { duration: Style.duration(100); easing.type: Easing.OutCubic }
+  }
+
+  transform: Translate {
+    y: root.previewOffset
+    Behavior on y {
+      NumberAnimation { duration: Style.duration(150); easing.type: Easing.OutCubic }
+    }
+  }
 
   function loadDrafts() {
     draftTitle = title
@@ -77,6 +95,20 @@ Item {
 
   HoverHandler {
     id: rowHover
+  }
+
+  DragHandler {
+    id: reorderDrag
+    enabled: root.manualMode && !root.daily && !root.editing
+    target: null
+    grabPermissions: PointerHandler.TakeOverForbidden
+    onActiveChanged: {
+      if (active) root.reorderStarted(root.taskId, centroid.scenePosition.y)
+      else root.reorderFinished(centroid.scenePosition.y)
+    }
+    onCentroidChanged: {
+      if (active) root.reorderMoved(centroid.scenePosition.y)
+    }
   }
 
   Rectangle {

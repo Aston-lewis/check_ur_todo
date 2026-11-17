@@ -26,23 +26,37 @@ Panel {
   property string query: ""
   property string draftPriority: "medium"
   property string activeTab: "ongoing"
+  property string sortMode: "priority"
   property var dailyTasks: []
   property string dailyResetDate: ""
   property var expandedIds: ({})
   property var editingIds: ({})
+  property string draggingTaskId: ""
+  property real dragPointerY: 0
+  property var previewTaskIds: []
 
-  readonly property var backlogTasks: Todos.listed(tasks, query, "backlog")
-  readonly property var ongoingTasks: Todos.listed(tasks, query, "ongoing")
-  readonly property var completeTasks: Todos.listed(tasks, query, "complete")
+  onTasksChanged: {
+      if (root.draggingTaskId === "") root.previewTaskIds = []
+  }
+
+  readonly property var backlogTasks: Todos.listed(tasks, query, "backlog", root.sortMode)
+  readonly property var ongoingTasks: Todos.listed(tasks, query, "ongoing", root.sortMode)
+  readonly property var completeTasks: Todos.listed(tasks, query, "complete", root.sortMode)
   readonly property var visibleTasks: activeTab === "daily"
     ? Todos.listedDaily(dailyTasks, query)
-    : Todos.listed(tasks, query, activeTab)
+    : Todos.listed(tasks, query, activeTab, root.sortMode)
   readonly property int ongoingCount: Todos.ongoingCount(tasks)
   readonly property string highestOngoing: Todos.highestOngoing(tasks)
   readonly property color badgeColor: highestOngoing !== "" ? Todos.color(highestOngoing) : Color.accent
   readonly property var priorityOptions: Todos.priorityOptions()
   readonly property var tabOptions: Todos.tabOptions()
   readonly property string draftStatus: Todos.addStatusForTab(activeTab)
+  readonly property var draggingTask: {
+    var wantedId = root.draggingTaskId
+    for (var i = 0; i < root.tasks.length; i++)
+      if (String(root.tasks[i].id) === wantedId) return root.tasks[i]
+    return null
+  }
 
   readonly property bool formFocused: titleField.activeFocus
     || descriptionField.activeFocus
@@ -59,7 +73,16 @@ Panel {
     if (!root.storeReady) return
     root.applyDailyRollover()
     applyingOwnWrite = true
-    storeFile.setText(Todos.serialize(root.tasks, root.activeTab, root.dailyTasks, root.dailyResetDate))
+    storeFile.setText(Todos.serialize(root.tasks, root.activeTab, root.dailyTasks, root.dailyResetDate, root.sortMode))
+  }
+
+  function setSortMode(mode) {
+    var nextMode = Todos.normalizeSortMode(mode)
+    if (root.sortMode === nextMode) return
+    root.sortMode = nextMode
+    // Rebuild the task model so it is immediately sorted by the selected mode.
+    root.tasks = root.tasks.slice()
+    root.persist()
   }
 
   function applyDailyRollover() {
@@ -110,6 +133,93 @@ Panel {
   function moveTask(id, status) {
     root.tasks = Todos.setStatus(root.tasks, id, status)
     root.persist()
+  }
+
+  function startReorder(id, y) {
+    if (root.sortMode !== "manual" || root.activeTab === "daily" || root.query !== "") return
+    root.draggingTaskId = id
+    root.dragPointerY = listColumn.mapFromItem(null, Qt.point(0, y)).y
+    var ordered = Todos.listed(root.tasks, "", root.activeTab, "manual")
+    root.previewTaskIds = ordered.map(function(task) { return String(task.id) })
+  }
+
+  function updateReorder(y) {
+    if (root.draggingTaskId === "") return
+    root.dragPointerY = listColumn.mapFromItem(null, Qt.point(0, y)).y
+    var from = root.previewTaskIds.indexOf(root.draggingTaskId)
+    if (from < 0) return
+    var to = from
+    for (var i = 0; i < root.previewTaskIds.length; i++) {
+      var row = null
+      for (var j = 0; j < taskRepeater.count; j++) {
+        var candidate = taskRepeater.itemAt(j)
+        if (candidate && String(candidate.task.id) === root.previewTaskIds[i]) { row = candidate; break }
+      }
+      if (!row || i === from) continue
+      var midpoint = row.y + row.height / 2
+      var deadband = row.height * 0.22
+      if ((i < from && root.dragPointerY < midpoint - deadband)
+          || (i > from && root.dragPointerY > midpoint + deadband)) {
+        to = i
+        break
+      }
+    }
+    if (to !== from) {
+      var preview = root.previewTaskIds.slice()
+      preview.splice(from, 1)
+      preview.splice(to, 0, root.draggingTaskId)
+      root.previewTaskIds = preview
+    }
+  }
+
+  function previewOffset(id) {
+    if (root.previewTaskIds.length === 0) return 0
+    var originalIndex = -1
+    var targetIndex = root.previewTaskIds.indexOf(id)
+    for (var i = 0; i < taskRepeater.count; i++) {
+      var row = taskRepeater.itemAt(i)
+      if (row && String(row.task.id) === id) { originalIndex = i; break }
+    }
+    if (originalIndex < 0 || targetIndex < 0) return 0
+    var targetY = 0
+    for (var j = 0; j < targetIndex; j++) {
+      var previousIndex = -1
+      for (var k = 0; k < taskRepeater.count; k++) {
+        var candidate = taskRepeater.itemAt(k)
+        if (candidate && String(candidate.task.id) === root.previewTaskIds[j]) { previousIndex = k; break }
+      }
+      var previous = previousIndex >= 0 ? taskRepeater.itemAt(previousIndex) : null
+      if (previous) targetY += previous.height + listColumn.spacing
+    }
+    var current = taskRepeater.itemAt(originalIndex)
+    return current ? targetY - current.y : 0
+  }
+
+  function finishReorder(y) {
+    if (root.draggingTaskId === "") return
+    y = listColumn.mapFromItem(null, Qt.point(0, y)).y
+    root.dragPointerY = y
+    var ordered = []
+    for (var i = 0; i < root.previewTaskIds.length; i++) {
+      for (var j = 0; j < root.tasks.length; j++) {
+        if (String(root.tasks[j].id) === root.previewTaskIds[i]) { ordered.push(root.tasks[j]); break }
+      }
+    }
+    if (ordered.length > 0) {
+      for (var k = 0; k < ordered.length; k++) {
+        for (var m = 0; m < root.tasks.length; m++) {
+          if (String(root.tasks[m].id) === String(ordered[k].id)) {
+            root.tasks[m].sortOrder = k + 1
+            break
+          }
+        }
+      }
+      root.persist()
+      root.draggingTaskId = ""
+      return
+    }
+    root.draggingTaskId = ""
+    root.previewTaskIds = []
   }
 
   function removeTask(id) {
@@ -233,6 +343,7 @@ Panel {
       root.dailyTasks = store.dailyTasks
       root.dailyResetDate = store.dailyResetDate
       root.activeTab = store.activeTab
+      root.sortMode = store.sortMode
       root.storeReady = true
       if (root.applyDailyRollover()) root.persist()
     }
@@ -283,8 +394,15 @@ Panel {
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
-        if (text === "/") root.startSearch()
-        else if (text === "n" || text === "N") root.startAdd()
+        if (text === "/") {
+            root.startSearch()
+        } else if (text === "n" || text === "N") {
+            root.startAdd()
+        } else if (text === "p" || text === "P") {
+            root.setSortMode("priority")
+        } else if (text === "m" || text === "M") {
+            root.setSortMode("manual")
+        }
       }
       onMoveRequested: function(dx, dy) {
         if (dx !== 0) {
@@ -321,11 +439,11 @@ Panel {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: "n add  ·  / search"
+            text: "n add · / search · p priority · m manual"
             color: Qt.darker(root.contentForeground, 1.55)
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
-          }
+          }          
         }
 
         TextField {
@@ -384,7 +502,7 @@ Panel {
           width: parent.width
           readonly property int cap: {
             var chrome = header.height + searchField.implicitHeight + tabRow.height
-                       + composer.implicitHeight + content.spacing * 4
+                       + composer.implicitHeight + modeFooter.implicitHeight + content.spacing * 5
             return Math.max(Style.space(72), Math.round(panel.maxCardHeight - panel.verticalContentInset - chrome))
           }
           height: Math.min(Math.max(listColumn.implicitHeight, Style.space(48)), cap)
@@ -421,6 +539,7 @@ Panel {
             }
 
             Repeater {
+              id: taskRepeater
               model: root.visibleTasks
 
               TaskRow {
@@ -428,6 +547,9 @@ Panel {
                 width: parent.width
                 task: modelData
                 daily: root.activeTab === "daily"
+                manualMode: root.sortMode === "manual"
+                dragHidden: String(modelData.id || "") === root.draggingTaskId
+                previewOffset: root.previewOffset(String(modelData.id || ""))
                 expanded: root.isExpanded(String(modelData.id || ""))
                 editing: root.isEditing(String(modelData.id || ""))
                 priorityOptions: root.priorityOptions
@@ -441,6 +563,99 @@ Panel {
                 onEditRequested: function(title, description, priority) {
                   root.editTask(taskId, title, description, priority)
                 }
+                onReorderStarted: function(id, y) { root.startReorder(id, y) }
+                onReorderMoved: function(y) { root.updateReorder(y) }
+                onReorderFinished: function(y) { root.finishReorder(y) }
+              }
+            }
+
+            Rectangle {
+              visible: true
+              opacity: root.draggingTaskId !== "" ? 1 : 0
+              z: 10
+              implicitHeight: 0
+              x: Style.space(4)
+              y: root.dragPointerY - height / 2
+              width: listColumn.width - Style.space(8)
+              height: Style.space(42)
+              radius: Style.cornerRadius
+              color: Util.alpha(root.contentForeground, 0.16)
+              border.width: 1
+              border.color: Color.accent
+
+              Behavior on opacity {
+                NumberAnimation { duration: Style.duration(90); easing.type: Easing.OutCubic }
+              }
+
+              Item {
+                id: dragCheck
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(12)
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(20)
+                height: width
+
+                Rectangle {
+                  anchors.fill: parent
+                  radius: width / 2
+                  color: root.draggingTask && root.draggingTask.completed
+                    ? Todos.color(root.draggingTask.priority)
+                    : "transparent"
+                  border.width: 2
+                  border.color: root.draggingTask
+                    ? Todos.color(root.draggingTask.priority)
+                    : Color.accent
+                }
+
+                Text {
+                  anchors.centerIn: parent
+                  visible: root.draggingTask && root.draggingTask.completed
+                  text: "\u2713"
+                  color: Color.background
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+              }
+
+              Rectangle {
+                id: dragPriority
+                anchors.left: dragCheck.right
+                anchors.leftMargin: Style.space(10)
+                anchors.verticalCenter: parent.verticalCenter
+                width: dragPriorityLabel.implicitWidth + Style.space(10)
+                height: dragPriorityLabel.implicitHeight + Style.space(4)
+                radius: height / 2
+                color: root.draggingTask ? Util.alpha(Todos.color(root.draggingTask.priority), 0.22) : "transparent"
+                border.width: 1
+                border.color: root.draggingTask ? Util.alpha(Todos.color(root.draggingTask.priority), 0.55) : "transparent"
+
+                Text {
+                  id: dragPriorityLabel
+                  anchors.centerIn: parent
+                  textFormat: Text.PlainText
+                  text: root.draggingTask ? Todos.label(root.draggingTask.priority).toUpperCase() : ""
+                  color: root.draggingTask ? Todos.color(root.draggingTask.priority) : root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  font.letterSpacing: 0.6
+                }
+              }
+
+              Text {
+                anchors.fill: parent
+                anchors.leftMargin: dragPriority.x + dragPriority.width + Style.space(8)
+                anchors.rightMargin: Style.space(12)
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+                text: root.draggingTask ? root.draggingTask.title : ""
+                color: root.contentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+                font.strikeout: root.draggingTask && root.draggingTask.completed
               }
             }
 
@@ -560,6 +775,19 @@ Panel {
             }
           }
         }
+        
+        Text {
+          id: modeFooter
+          width: parent.width
+          textFormat: Text.PlainText
+          horizontalAlignment: Text.AlignRight
+          text: root.sortMode === "manual" ? "manual" : "priority"
+          color: root.sortMode === "manual" ? "#3D9B68" : "#E24B4A"
+          font.family: root.contentFontFamily
+          font.pointSize: 7
+          font.bold: true
+        }
+        
       }
     }
   }
